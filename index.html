@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas of Us</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F5F0E6; --ink:#1E2A32; --ink-soft:#5B6B72; --line:#D8CFBB;
+    --home:#2F6F63; --travel:#C97A3B; --dream:#6B4E9E; --panel:#FFFDF8;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{font-family:'Inter',sans-serif;color:var(--ink);background:var(--paper);overflow:hidden;}
+  #app{position:relative;width:100%;height:100vh;}
+  #map{position:absolute;inset:0;filter:saturate(0.85);}
+  .leaflet-tile-pane{filter:sepia(0.12) saturate(0.9) brightness(1.02);}
+
+  #title{position:absolute;top:16px;left:16px;z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 16px;box-shadow:0 4px 14px rgba(30,42,50,0.12);}
+  #title h1{font-family:'Fraunces',serif;font-size:19px;font-weight:600;margin:0;letter-spacing:0.2px;}
+  #title p{margin:2px 0 0;font-size:11.5px;color:var(--ink-soft);}
+
+  #presence{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 12px;box-shadow:0 4px 14px rgba(30,42,50,0.12);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-soft);max-width:44vw;}
+  #presence .dot{width:7px;height:7px;border-radius:50%;background:#3FA672;flex:none;}
+  #presence-names{display:flex;flex-wrap:wrap;gap:5px;}
+  .presence-pill{background:#EFE8D8;color:var(--ink);border-radius:999px;padding:2px 8px;font-weight:500;font-size:11.5px;}
+
+  #feedToggle{position:absolute;top:16px;right:16px;z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--ink-soft);cursor:pointer;box-shadow:0 4px 14px rgba(30,42,50,0.12);}
+  #feedPanel{position:absolute;top:60px;right:16px;z-index:1000;width:260px;max-height:52vh;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(30,42,50,0.18);padding:10px 12px;display:none;}
+  #feedPanel h4{font-family:'Fraunces',serif;margin:0 0 8px;font-size:13.5px;}
+  .feed-item{font-size:12px;line-height:1.4;padding:6px 0;border-top:1px solid var(--line);color:var(--ink);}
+  .feed-item:first-child{border-top:none;}
+  .feed-item .who{font-weight:600;}
+  .feed-item .when{color:var(--ink-soft);font-size:10.5px;display:block;margin-top:1px;}
+  #feedEmpty{font-size:12px;color:var(--ink-soft);}
+
+  #toolbar{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(30,42,50,0.18);display:flex;gap:10px;align-items:stretch;max-width:94vw;overflow-x:auto;}
+  .pin-btn{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;color:var(--ink);transition:box-shadow .15s ease, border-color .15s ease, transform .1s ease;white-space:nowrap;}
+  .pin-btn:hover{transform:translateY(-1px);}
+  .pin-btn.armed{border-color:currentColor;box-shadow:0 0 0 2px currentColor inset;}
+  .pin-emoji{font-size:16px;line-height:1;}
+  .swatch{width:16px;height:16px;border-radius:50%;border:1px solid rgba(0,0,0,0.15);padding:0;cursor:pointer;-webkit-appearance:none;appearance:none;}
+  .swatch::-webkit-color-swatch-wrapper{padding:0;}
+  .swatch::-webkit-color-swatch{border:none;border-radius:50%;}
+
+  #statusBar{position:absolute;bottom:20px;left:16px;z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:11.5px;color:var(--ink-soft);box-shadow:0 4px 14px rgba(30,42,50,0.12);display:flex;align-items:center;gap:6px;}
+  #statusBar .sdot{width:7px;height:7px;border-radius:50%;background:#3FA672;}
+  #statusBar.error .sdot{background:#B23B3B;}
+  #statusBar.error{color:#8B3A3A;}
+
+  #hint{position:absolute;top:64px;right:16px;z-index:999;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--ink-soft);max-width:230px;box-shadow:0 4px 14px rgba(30,42,50,0.12);}
+
+  #overlay{position:absolute;inset:0;z-index:2000;background:rgba(30,42,50,0.35);display:none;align-items:center;justify-content:center;}
+  #modal{background:var(--panel);border-radius:14px;padding:22px;width:300px;box-shadow:0 20px 50px rgba(0,0,0,0.25);font-family:'Inter',sans-serif;}
+  #modal h3{font-family:'Fraunces',serif;margin:0 0 4px;font-size:17px;}
+  #modal .sub{font-size:12px;color:var(--ink-soft);margin-bottom:14px;}
+  #modal input[type=text]{width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13.5px;font-family:'Inter',sans-serif;margin-bottom:14px;}
+  #modal .row{display:flex;gap:8px;justify-content:flex-end;}
+  #modal button{border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
+  #cancelBtn{background:#EFE8D8;color:var(--ink-soft);}
+  #saveBtn{background:var(--ink);color:#fff;}
+
+  .pin-popup{font-family:'Inter',sans-serif;font-size:13px;}
+  .pin-popup .ptype{font-weight:600;margin-bottom:2px;}
+  .pin-popup .pmeta{color:var(--ink-soft);font-size:11px;margin-bottom:8px;}
+  .pin-popup button{background:#F4E2E2;color:#9B3B3B;border:none;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-weight:600;}
+
+  #joinOverlay{position:absolute;inset:0;z-index:3000;background:rgba(30,42,50,0.45);display:flex;align-items:center;justify-content:center;}
+  #joinModal{background:var(--panel);border-radius:16px;padding:26px;width:300px;box-shadow:0 20px 50px rgba(0,0,0,0.3);text-align:center;}
+  #joinModal h2{font-family:'Fraunces',serif;margin:0 0 6px;font-size:20px;}
+  #joinModal p{font-size:12.5px;color:var(--ink-soft);margin:0 0 16px;}
+  #joinModal input{width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:12px;text-align:center;font-family:'Inter',sans-serif;}
+  #joinModal button{width:100%;border:none;border-radius:8px;background:var(--ink);color:#fff;padding:10px;font-size:13.5px;font-weight:600;cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+
+  <div id="title">
+    <h1>Atlas of Us</h1>
+    <p>A shared map &mdash; anyone with the link can add pins</p>
+  </div>
+
+  <div id="presence">
+    <span class="dot"></span>
+    <span>Online now:</span>
+    <div id="presence-names"></div>
+  </div>
+
+  <div id="feedToggle">🕓 Activity</div>
+  <div id="feedPanel">
+    <h4>Recent activity</h4>
+    <div id="feedList"><div id="feedEmpty">Nothing yet &mdash; be the first to drop a pin.</div></div>
+  </div>
+
+  <div id="hint">Pick a pin type below, then click anywhere on the map to place it.</div>
+
+  <div id="toolbar">
+    <button class="pin-btn" id="btn-home" style="color:var(--home)">
+      <span class="pin-emoji">📍</span> Where I live
+      <input type="color" class="swatch" id="color-home" value="#2F6F63" title="Pin color">
+    </button>
+    <button class="pin-btn" id="btn-travel" style="color:var(--travel)">
+      <span class="pin-emoji">✈️</span> Traveled this year
+      <input type="color" class="swatch" id="color-travel" value="#C97A3B" title="Pin color">
+    </button>
+    <button class="pin-btn" id="btn-dream" style="color:var(--dream)">
+      <span class="pin-emoji">⭐</span> Dream destination
+      <input type="color" class="swatch" id="color-dream" value="#6B4E9E" title="Pin color">
+    </button>
+  </div>
+
+  <div id="statusBar"><span class="sdot"></span><span id="statusText">Connecting…</span></div>
+
+  <div id="overlay">
+    <div id="modal">
+      <h3 id="modalTitle">Add a label</h3>
+      <div class="sub" id="modalSub">Optional &mdash; e.g. a name or place</div>
+      <input type="text" id="labelInput" placeholder="e.g. Lagos, or Amaka's home" maxlength="60">
+      <div class="row">
+        <button id="cancelBtn">Cancel</button>
+        <button id="saveBtn">Drop pin</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="joinOverlay">
+    <div id="joinModal">
+      <h2>Join the map</h2>
+      <p>Enter your name so teammates can see who's here and who added what.</p>
+      <input type="text" id="joinInput" placeholder="Your name" maxlength="30">
+      <button id="joinBtn">Join</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+  const PIN_TYPES = {
+    home:   { emoji:'📍', label:'Where I live',        defaultColor:'#2F6F63' },
+    travel: { emoji:'✈️', label:'Traveled this year',   defaultColor:'#C97A3B' },
+    dream:  { emoji:'⭐', label:'Dream destination',    defaultColor:'#6B4E9E' }
+  };
+  const PRESENCE_TTL_MS = 40000;
+  const PIN_POLL_MS = 5000;
+  const ACTIVITY_POLL_MS = 6000;
+  const PRESENCE_POLL_MS = 12000;
+  const HEARTBEAT_MS = 20000;
+
+  let armedType = null;
+  let pendingLatLng = null;
+  let pins = [];
+  let activity = [];
+  let myName = '';
+  const markers = {};
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function api(path, options){
+    const res = await fetch('/api/' + path, options);
+    if (!res.ok) throw new Error('Request to ' + path + ' failed: ' + res.status);
+    return res.json();
+  }
+
+  function setStatus(ok, text){
+    const bar = document.getElementById('statusBar');
+    bar.classList.toggle('error', !ok);
+    document.getElementById('statusText').textContent = text;
+  }
+
+  // --- Join flow ---
+  document.getElementById('joinBtn').addEventListener('click', joinMap);
+  document.getElementById('joinInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinMap(); });
+  function joinMap(){
+    const val = document.getElementById('joinInput').value.trim();
+    if (!val) { document.getElementById('joinInput').focus(); return; }
+    myName = val.slice(0, 30);
+    document.getElementById('joinOverlay').style.display = 'none';
+    heartbeat();
+    setInterval(heartbeat, HEARTBEAT_MS);
+    window.addEventListener('beforeunload', () => {
+      navigator.sendBeacon && navigator.sendBeacon('/api/presence', JSON.stringify({ name: myName }));
+    });
+  }
+
+  async function heartbeat(){
+    if (!myName) return;
+    try{ await api('presence', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: myName }) }); }
+    catch(err){ /* best effort */ }
+  }
+
+  async function loadPresence(){
+    try{
+      const people = await api('presence');
+      const now = Date.now();
+      const online = Object.keys(people).filter(name => now - people[name] <= PRESENCE_TTL_MS);
+      renderPresence(online.length ? online : (myName ? [myName] : []));
+    }catch(err){
+      renderPresence(myName ? [myName] : []);
+    }
+  }
+
+  function renderPresence(names){
+    const wrap = document.getElementById('presence-names');
+    const unique = [...new Set(names)];
+    wrap.innerHTML = unique.length
+      ? unique.map(n => `<span class="presence-pill">${escapeHtml(n)}</span>`).join('')
+      : '<span class="presence-pill">just you, so far</span>';
+  }
+
+  // --- Activity feed ---
+  function timeAgo(ms){
+    const diff = Math.max(0, Date.now() - ms);
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
+  }
+
+  function renderFeed(){
+    const list = document.getElementById('feedList');
+    if (!activity.length){
+      list.innerHTML = '<div id="feedEmpty">Nothing yet &mdash; be the first to drop a pin.</div>';
+      return;
+    }
+    const sorted = [...activity].sort((a,b) => b.at - a.at);
+    list.innerHTML = sorted.map(a => {
+      const meta = PIN_TYPES[a.type] || { emoji:'📍', label:'pin' };
+      const verb = a.action === 'removed' ? 'removed a' : 'added a';
+      const where = a.label ? ` &mdash; "${escapeHtml(a.label)}"` : '';
+      return `<div class="feed-item"><span class="who">${escapeHtml(a.name || 'Someone')}</span> ${verb} ${meta.emoji} ${meta.label}${where}<span class="when">${timeAgo(a.at)}</span></div>`;
+    }).join('');
+  }
+
+  async function loadActivity(){
+    try{
+      activity = await api('activity');
+      renderFeed();
+    }catch(err){ /* keep showing what we have */ }
+  }
+
+  async function logActivity(entry){
+    try{ await api('activity', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry) }); }
+    catch(err){ console.warn('Could not log activity', err); }
+  }
+
+  document.getElementById('feedToggle').addEventListener('click', () => {
+    const panel = document.getElementById('feedPanel');
+    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+  });
+
+  // --- Toolbar / placement ---
+  Object.keys(PIN_TYPES).forEach(type => {
+    document.getElementById('btn-' + type).addEventListener('click', (e) => {
+      if (e.target.classList.contains('swatch')) return;
+      setArmed(type === armedType ? null : type);
+    });
+  });
+
+  function setArmed(type){
+    armedType = type;
+    Object.keys(PIN_TYPES).forEach(t => document.getElementById('btn-' + t).classList.toggle('armed', t === type));
+    document.getElementById('map').style.cursor = type ? 'crosshair' : '';
+    const hint = document.getElementById('hint');
+    hint.innerHTML = type
+      ? 'Click the map to place <b>' + PIN_TYPES[type].emoji + ' ' + PIN_TYPES[type].label + '</b>'
+      : 'Pick a pin type below, then click anywhere on the map to place it.';
+  }
+
+  const map = L.map('map', { worldCopyJump:true, minZoom:2, maxZoom:12 }).setView([20,10], 3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 12
+  }).addTo(map);
+
+  map.on('click', (e) => {
+    if (!armedType) return;
+    pendingLatLng = e.latlng;
+    document.getElementById('modalTitle').textContent = PIN_TYPES[armedType].emoji + ' ' + PIN_TYPES[armedType].label;
+    document.getElementById('labelInput').value = '';
+    document.getElementById('overlay').style.display = 'flex';
+    document.getElementById('labelInput').focus();
+  });
+
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeModal(); });
+  function closeModal(){ document.getElementById('overlay').style.display = 'none'; pendingLatLng = null; }
+
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    if (!pendingLatLng) return closeModal();
+    const label = document.getElementById('labelInput').value.trim();
+    const color = document.getElementById('color-' + armedType).value;
+    const addedAt = Date.now();
+    const pin = {
+      id: 'pin_' + addedAt + '_' + Math.random().toString(36).slice(2,8),
+      type: armedType, color, lat: pendingLatLng.lat, lng: pendingLatLng.lng,
+      label, addedBy: myName || 'Someone', addedAt
+    };
+    closeModal();
+    setArmed(null);
+    pins.push(pin);
+    addOrUpdateMarker(pin);
+    try{
+      await api('pins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(pin) });
+      logActivity({ name: pin.addedBy, action:'added', type: pin.type, label: pin.label, at: addedAt });
+    }catch(err){
+      console.warn('Could not save pin', err);
+      setStatus(false, 'Could not save that pin — will retry on next sync');
+    }
+  });
+
+  document.getElementById('labelInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('saveBtn').click();
+    if (e.key === 'Escape') closeModal();
+  });
+
+  function makeIcon(pin){
+    const meta = PIN_TYPES[pin.type];
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;background:${pin.color};
+        transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
+        box-shadow:0 3px 8px rgba(0,0,0,0.35);border:2px solid #fff;">
+        <span style="transform:rotate(45deg);font-size:15px;">${meta.emoji}</span></div>`,
+      iconSize:[34,34], iconAnchor:[17,32], popupAnchor:[0,-30]
+    });
+  }
+
+  function addOrUpdateMarker(pin){
+    const meta = PIN_TYPES[pin.type];
+    if (!meta) return;
+    if (markers[pin.id]) map.removeLayer(markers[pin.id]);
+    const marker = L.marker([pin.lat, pin.lng], { icon: makeIcon(pin) }).addTo(map);
+    const dateStr = new Date(pin.addedAt).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+    const byStr = pin.addedBy ? ` by ${escapeHtml(pin.addedBy)}` : '';
+    const html = document.createElement('div');
+    html.className = 'pin-popup';
+    html.innerHTML = `
+      <div class="ptype">${meta.emoji} ${pin.label ? escapeHtml(pin.label) : meta.label}</div>
+      <div class="pmeta">${meta.label} &middot; added${byStr} &middot; ${dateStr}</div>
+      <button>Remove pin</button>
+    `;
+    html.querySelector('button').addEventListener('click', () => removePin(pin));
+    marker.bindPopup(html);
+    markers[pin.id] = marker;
+  }
+
+  async function removePin(pin){
+    pins = pins.filter(p => p.id !== pin.id);
+    if (markers[pin.id]) { map.removeLayer(markers[pin.id]); delete markers[pin.id]; }
+    try{
+      await api('pins', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: pin.id }) });
+      logActivity({ name: myName || 'Someone', action:'removed', type: pin.type, label: pin.label, at: Date.now() });
+    }catch(err){
+      console.warn('Could not remove pin', err);
+      setStatus(false, 'Could not remove that pin — will retry on next sync');
+    }
+  }
+
+  function renderAllPins(){
+    const seen = new Set();
+    pins.forEach(p => { seen.add(p.id); addOrUpdateMarker(p); });
+    Object.keys(markers).forEach(id => {
+      if (!seen.has(id)) { map.removeLayer(markers[id]); delete markers[id]; }
+    });
+  }
+
+  let firstLoad = true;
+  async function loadPins(){
+    try{
+      pins = await api('pins');
+      renderAllPins();
+      setStatus(true, firstLoad ? 'Connected' : 'Synced just now');
+      firstLoad = false;
+    }catch(err){
+      setStatus(false, 'Sync error — retrying…');
+    }
+  }
+
+  loadPins();
+  loadActivity();
+  loadPresence();
+  setInterval(loadPins, PIN_POLL_MS);
+  setInterval(loadActivity, ACTIVITY_POLL_MS);
+  setInterval(loadPresence, PRESENCE_POLL_MS);
+})();
+</script>
+</body>
+</html>
